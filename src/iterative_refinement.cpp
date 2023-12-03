@@ -1,10 +1,9 @@
-﻿#include <iostream>
+#include <iostream>
 #include <iomanip>
 #include <cmath>
 #include <tuple>
 #include <vector>
 #include <Eigen/LU> 
-#include <Eigen/Core>
 #include <Eigen/SVD>
 
 
@@ -17,58 +16,63 @@ Iterative Refinement for Singular Value Decomposition. 10.21203/rs.3.rs1931986/
 *2)каждое сингулярное значение больше последующего (d1>d2>...>dn)
 * 3)каждое приближенное сингулярное значение отлично друг от друга (di != dj для i!=j)
 * 
-* Выполнил Едренников Д.А.
+* Выполнил Едренников Д.А. КМБО-01-20
 */
 
 
-template<typename T, int N, int M>
-std::tuple<Eigen::Matrix<T, M, M>, Eigen::Matrix<T, N, N>, Eigen::Matrix<T, M, N>>
-MSVD_SVD(const Eigen::Matrix<T, M, N> &A, const  Eigen::Matrix<T, M, M> &Ui, const  Eigen::Matrix<T, N, N> &Vi)
+
+std::tuple<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>>
+MSVD_SVD(const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> &A, const  Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> &Ui, const  Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> &Vi)
 {
     const int m = A.rows();
     const int n = A.cols();
+
     if ( A.rows()< A.cols())
     {
         std::cout << "Attention! Number of the rows must be greater or equal  than  number of the columns";
-        return std::make_tuple(Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Constant(m, m, 0.0), Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Constant(n, n, 0.0),
-            Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Constant(m, n, 0.0));
+        return std::make_tuple(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>::Constant(m, m, 0.0), Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>::Constant(n, n, 0.0),
+            Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>::Constant(m, n, 0.0));
     }
 
-    Eigen::Matrix<double, M, N> P = A.cast<double>() * Vi.cast<double>();
-    Eigen::Matrix<double, N, N> Q = A.transpose().cast<double>() * Ui.block(0,0,m, n).cast<double>();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Ad = A.cast<double>();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Ud = Ui.cast<double>();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Vd = Vi.cast<double>();
 
-    Eigen::Matrix<double, N, N> ViT = Vi.transpose().cast<double>();
-    Eigen::Matrix<double, M, M> UiT = Ui.transpose().cast<double>();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> P = Ad * Vd;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Q = Ad.transpose() * Ud.block(0,0,m, n);
+
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> ViT = Vd.transpose();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> UiT = Ud.transpose();
     std::vector<double> r (n, 0.0);
     std::vector<double> s (n, 0.0);
     std::vector<double> t (n, 0.0);
-    Eigen::Matrix<double, N,N> Sigma_n(n,n);
+    Eigen::Matrix<double, Eigen::Dynamic,Eigen::Dynamic> Sigma_n(n,n);
     Sigma_n.setZero();
 
     for (int i = 0; i < n; i++)
     {
-        r[i] = 1.0 - UiT.row(i) * Ui.col(i).cast<double>();
-        s[i] = 1.0 - ViT.row(i) * Vi.col(i).cast<double>();
+        r[i] = 1.0 - UiT.row(i) * Ud.col(i);
+        s[i] = 1.0 - ViT.row(i) * Vd.col(i);
         t[i] = UiT.row(i) *P.col(i);
         Sigma_n(i,i) = t[i] / (1 - ((r[i] + s[i]) * 0.5));
 
     };
 
-    Eigen::Matrix<T,M,N> Sigma(m,n);
+    Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> Sigma(m,n);
     Sigma.setZero();
-    Sigma.block(0,0,n, n) = Sigma_n.transpose().cast<T>();
+    Sigma.block(0,0,n, n) = Sigma_n.transpose();
 
-    Eigen::Matrix<double, M, N> Cgamma = P - Ui.block(0,0,m, n).cast<double>() * Sigma_n;
-    Eigen::Matrix<double, M, N> Cdelta = Q - Vi.cast<double>() * Sigma_n;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Cgamma = P - Ud.block(0,0,m, n) * Sigma_n;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Cdelta = Q - Vd * Sigma_n;
 
-    Eigen::Matrix<T, N, N> Calpha = Ui.block(0,0, m, n).transpose() * Cgamma.cast<T>();
-    Eigen::Matrix<T, N, N> Cbetta = ViT.cast<T>() * Cdelta.cast<T>();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Calpha = Ud.block(0,0, m, n).transpose() * Cgamma;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Cbetta = ViT * Cdelta;
 
-    Eigen::Matrix<double, N, N> D = Sigma_n * Calpha.cast<double>() + Cbetta.cast<double>() * Sigma_n;
-    Eigen::Matrix<double, N, N> E = Calpha.cast<double>() * Sigma_n + Sigma_n * Cbetta.cast<double>();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> D = Sigma_n * Calpha + Cbetta * Sigma_n;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> E = Calpha * Sigma_n + Sigma_n * Cbetta;
 
-    Eigen::Matrix<double, N, N> G(n,n);
-    Eigen::Matrix<double, N, N> F11(n, n);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> G(n,n);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> F11(n, n);
 
     for (int i = 0; i < n; i++)
     {
@@ -86,32 +90,32 @@ MSVD_SVD(const Eigen::Matrix<T, M, N> &A, const  Eigen::Matrix<T, M, M> &Ui, con
     }
 
 
-    Eigen::Matrix<double, N, Eigen::Dynamic > F12(n, m-n);
-    F12 = Sigma_n.inverse() * P.transpose() * Ui.block(0, n, m, m - n).cast<double>();
-    Eigen::Matrix<double, Eigen::Dynamic, N> F21 = Ui.block(0,n-1,m, m - n).transpose().cast<double>() * Cgamma * Sigma_n.inverse();
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic > F22 = 0.5 * (Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Constant(m - n, m - n, 1.0).cast<double>() -
-        Ui.block(0,n-1,m, m - n).transpose().cast<double>() * Ui.block(0, n, m, m - n).cast<double>());
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic > F12(n, m-n);
+    F12 = Sigma_n.inverse() * P.transpose() * Ud.block(0, n, m, m - n);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> F21 = Ud.block(0,n-1,m, m - n).transpose() * Cgamma * Sigma_n.inverse();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic > F22 = 0.5 * (Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>::Constant(m - n, m - n, 1.0) -
+        Ud.block(0,n-1,m, m - n).transpose() * Ud.block(0, n, m, m - n));
 
 
     
-    Eigen::Matrix<double, M, M > F(m,m);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic > F(m,m);
     F.block(0, 0, n, n) = F11;
     F.block(0, n , n, m-n) = F12;
     F.block(n, 0, m-n, n) = F21;
     F.block(n , n, m - n, m - n) = F22;
 
 
-    Eigen::Matrix<T, M, M > U = Ui+ Ui*F.cast<T>();
-    Eigen::Matrix<T, N, N > V = Vi + Vi * G.cast<T>();
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic > U = Ud+ Ud*F;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic > V = Vd + Vd * G;
+
 
    return std::make_tuple(U, V, Sigma);
 }
 
-template<typename T, int N, int M>
-std::tuple<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>, Eigen::Matrix<T, N, N>, Eigen::Matrix<T, M, N>>
-Accurate_BDCSVD(const Eigen::Matrix<T, M, N> &A)
+std::tuple<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>>
+Accurate_BDCSVD(const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> &A)
 {
-    Eigen::BDCSVD< Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>> svd(A, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Eigen::BDCSVD< Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>> svd(A, Eigen::ComputeFullU | Eigen::ComputeFullV);
     return  MSVD_SVD(A, svd.matrixU(), svd.matrixV());
 }
 
@@ -132,8 +136,8 @@ int main()
         3, 9, (float)4.98942, (float)0.324235,  443534, 345, (float)56.543853, (float)450.435234, (float)43.34353221;
 
    BDCSVD<MatrixXf> svd(A, ComputeFullU | ComputeFullV);
-   std::tuple<Eigen::Matrix<float, 10, 10>, Eigen::Matrix<float, 9, 9>, Eigen::Matrix<float, 10, 9>> a =
-        Accurate_BDCSVD(A);
+   std::tuple<Eigen::Matrix<double, 10, 10>, Eigen::Matrix<double, 9, 9>, Eigen::Matrix<double, 10, 9>> a =
+       MSVD_SVD(A, svd.matrixU(), svd.matrixV());
    std::cout << get<0>(a)*get<2>(a)*get<1>(a).transpose() <<"\n" << "\n";
     Array<float,1, Dynamic> sigm(9);
     sigm  = svd.singularValues();
